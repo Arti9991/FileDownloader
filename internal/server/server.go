@@ -4,7 +4,9 @@ import (
 	"downloader/internal/config"
 	"downloader/internal/handlers"
 	"downloader/internal/logger"
+	"downloader/internal/models"
 	"downloader/internal/storage"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -19,7 +21,7 @@ type Server struct {
 func StartServer() error {
 	var err error
 	serv := new(Server)
-
+	reqCh := make(chan models.ChanURLs, 3)
 	serv.Config, err = config.InitConfig()
 	if err != nil {
 		return err
@@ -29,13 +31,15 @@ func StartServer() error {
 
 	logger.Log.Info("Logger initialyzed!", zap.Bool("Loggin in file is", serv.InFileLog))
 
-	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir)
+	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir, reqCh)
 
 	err = storage.NewStor(serv.StorageDir)
 	if err != nil && err != http.ErrServerClosed {
 		logger.Log.Info("Error in creating storage", zap.Error(err))
 		return err
 	}
+
+	DownloadReq(reqCh, &serv.HandlersData)
 
 	srv := http.Server{
 		Handler: serv.ChiRouter(),
@@ -59,7 +63,7 @@ func (s *Server) ChiRouter() chi.Router {
 	rt.Use(logger.MiddlewareLogger)
 
 	rt.Post("/task", handlers.PostTask(s.HandlersData))
-	rt.Post("/task/add", handlers.PostUrl(s.HandlersData))
+	rt.Post("/task/{id}", handlers.PostUrl(s.HandlersData))
 	// rt.Get("/{id}", handlers.GetAddr(s.hd))
 	// rt.Get("/ping", handlers.Ping(s.hd))
 	// rt.Post("/api/shorten", handlers.PostAddrJSON(s.hd))
@@ -68,4 +72,16 @@ func (s *Server) ChiRouter() chi.Router {
 	// rt.Delete("/api/user/urls", handlers.DeleteAddr(s.hd))
 
 	return rt
+}
+
+func DownloadReq(inp chan models.ChanURLs, Hd *handlers.HandlersData) error {
+	go func() {
+		for URL := range inp {
+			go func(URL models.ChanURLs) {
+				// здесь написать логику запросов на скачивание
+				fmt.Printf("TaskID: %s\t URL:%s\n", URL.TaskID, URL.URL)
+			}(URL)
+		}
+	}()
+	return nil
 }

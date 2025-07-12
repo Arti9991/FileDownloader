@@ -1,17 +1,17 @@
 package handlers
 
+import "downloader/internal/models"
+
 type HandlersData struct {
 	StorageAddr string
-	Tasks       []string
+	Tasks       map[string]map[string]string
+	reqChan     chan models.ChanURLs
 }
 
-func InitHandlersData(Stor string) HandlersData {
+func InitHandlersData(Stor string, reqChan chan models.ChanURLs) HandlersData {
 	HD := new(HandlersData)
 	HD.StorageAddr = Stor
-	HD.Tasks = make([]string, 0, 3)
+	HD.Tasks = make(map[string]map[string]string, 3)
+	HD.reqChan = reqChan
 	return *HD
-}
-
-type URL struct {
-	RespURL string `json:"url"`
 }

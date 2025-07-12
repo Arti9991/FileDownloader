@@ -24,7 +24,8 @@ func PostTask(Hd HandlersData) http.HandlerFunc {
 			TaskID := rand.Text()[:8]
 			fmt.Println(TaskID)
 
-			Hd.Tasks = append(Hd.Tasks, TaskID)
+			URLs := make(map[string]string, 3)
+			Hd.Tasks[TaskID] = URLs
 			err = storage.NewTask(Hd.StorageAddr, TaskID)
 			if err != nil {
 				logger.Log.Error("Error in creating storage for task!", zap.Error(err))
