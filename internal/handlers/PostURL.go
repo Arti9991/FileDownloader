@@ -56,16 +56,28 @@ func PostUrl(Hd HandlersData) http.HandlerFunc {
 			return
 		}
 
-		if len(IncomeURL)-len(URLs) < 0 || len(IncomeURL) == 0 {
-			logger.Log.Info("Too many URLs in request")
+		if len(IncomeURL) == 0 {
+			logger.Log.Info("Request is empty")
 			res.WriteHeader(http.StatusBadRequest)
 			return
 		}
+
+		rem := 3 - len(URLs)
+		if rem > 0 {
+			if rem > len(IncomeURL) {
+				rem = len(IncomeURL)
+			}
+			IncomeURL = IncomeURL[:rem]
+		} else {
+			logger.Log.Info("Task is full")
+			res.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		for _, inc := range IncomeURL {
 			var Send models.ChanURLs
 			Send.TaskID = TaskID
 			Send.URL = inc.RespURL
-			Hd.Tasks[TaskID][inc.RespURL] = "PROCEED"
 			Hd.reqChan <- Send
 		}
 
