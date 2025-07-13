@@ -42,10 +42,10 @@ func GetDownload(Hd HandlersData) http.HandlerFunc {
 		}
 
 		os.RemoveAll(Hd.StorageAddr + "/" + TaskID)
-
+		delete(Hd.Tasks, TaskID)
 		// добавить логику уления файла архива после отправки (возомжно при шатдауне)
 		// сами по себе папки с файлами будут удаляться вместе с отправкой архива
-		// также добавить возможность удаления задания
+
 		res.Header().Set("Content-Disposition", "attachment; filename="+TaskID+".zip")
 		res.Header().Set("Content-Type", "application/zip")
 		http.ServeFile(res, req, ZipPath)

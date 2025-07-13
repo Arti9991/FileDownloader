@@ -48,7 +48,7 @@ func GetStatus(Hd HandlersData) http.HandlerFunc {
 		out, err := json.MarshalIndent(info, "", " ")
 		if err != nil {
 			logger.Log.Info("Wrong responce body", zap.Error(err))
-			res.WriteHeader(http.StatusBadRequest)
+			res.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 

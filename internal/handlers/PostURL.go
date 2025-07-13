@@ -35,18 +35,12 @@ func PostUrl(Hd HandlersData) http.HandlerFunc {
 		fmt.Println(TaskID)
 
 		URLs, has := Hd.Tasks[TaskID]
-		if !has || len(URLs) == 3 {
-			logger.Log.Info("There's no task witch this TaskID or this task completed",
+		if !has {
+			logger.Log.Info("There's no task witch this TaskID",
 				zap.String("taskID", TaskID))
 			res.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
-		// if len(Hd.Tasks) >= 3 {
-		// 	logger.Log.Info("List this tasks is full", zap.String("taskID", TaskID))
-		// 	res.WriteHeader(http.StatusTooManyRequests)
-		// 	return
-		// }
 
 		var IncomeURL []models.URL
 		err = json.NewDecoder(req.Body).Decode(&IncomeURL)
@@ -70,18 +64,25 @@ func PostUrl(Hd HandlersData) http.HandlerFunc {
 			IncomeURL = IncomeURL[:rem]
 		} else {
 			logger.Log.Info("Task is full")
-			res.WriteHeader(http.StatusBadRequest)
+			res.WriteHeader(http.StatusTooManyRequests)
 			return
 		}
-
-		for _, inc := range IncomeURL {
-			var Send models.ChanURLs
-			Send.TaskID = TaskID
-			Send.URL = inc.RespURL
-			Hd.reqChan <- Send
-		}
+		Hd.HdWG.Add(1)
+		ThreadSend(IncomeURL, Hd, TaskID)
 
 		//fmt.Println(IncomeURL)
 		res.WriteHeader(http.StatusAccepted)
 	}
+}
+
+func ThreadSend(inp []models.URL, Hd HandlersData, TaskID string) {
+	go func() {
+		defer Hd.HdWG.Done()
+		for _, val := range inp {
+			var Send models.ChanURLs
+			Send.TaskID = TaskID
+			Send.URL = val.RespURL
+			Hd.reqChan <- Send
+		}
+	}()
 }

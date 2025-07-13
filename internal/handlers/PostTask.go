@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"downloader/internal/logger"
 	"downloader/internal/storage"
-	"fmt"
 	"net/http"
 
 	"go.uber.org/zap"
@@ -21,8 +20,9 @@ func PostTask(Hd HandlersData) http.HandlerFunc {
 		var err error
 
 		if len(Hd.Tasks) < 3 {
+			Hd.Mu.Lock()
+			defer Hd.Mu.Unlock()
 			TaskID := rand.Text()[:8]
-			fmt.Println(TaskID)
 
 			URLs := make(map[string]string, 3)
 			Hd.Tasks[TaskID] = URLs

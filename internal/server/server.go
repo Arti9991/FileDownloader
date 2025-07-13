@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"downloader/internal/config"
 	"downloader/internal/handlers"
 	"downloader/internal/logger"
@@ -10,8 +11,11 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -21,22 +25,35 @@ import (
 type Server struct {
 	config.Config
 	handlers.HandlersData
+	ServWG *sync.WaitGroup
 }
 
 func StartServer() error {
 	var err error
 	serv := new(Server)
 	reqCh := make(chan models.ChanURLs, 3)
+	shutCh := make(chan struct{})
+
+	var HandWG sync.WaitGroup
+	var ServWG sync.WaitGroup
+
+	var MapMU sync.Mutex
+
+	serv.ServWG = &ServWG
+
 	serv.Config, err = config.InitConfig()
 	if err != nil {
 		return err
 	}
+	// контекст для ожидания системного сигнала на завершение работы
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	logger.Initialize(serv.InFileLog)
 
 	logger.Log.Info("Logger initialyzed!", zap.Bool("Loggin in file is", serv.InFileLog))
 
-	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir, reqCh)
+	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir, reqCh, &HandWG, &MapMU)
 
 	err = storage.NewStor(serv.StorageDir)
 	if err != nil && err != http.ErrServerClosed {
@@ -51,11 +68,24 @@ func StartServer() error {
 		Addr:    serv.HostAddr,
 	}
 
+	RunWaitShutdown(ctx, shutCh, &srv)
+
 	err = srv.ListenAndServe()
 	if err != nil && err != http.ErrServerClosed {
 		logger.Log.Info("Error in ListenAndServe", zap.Error(err))
 		return err
 	}
+	// ожидание сообщения о Shutdown
+	<-shutCh
+
+	serv.HdWG.Wait()
+	serv.ServWG.Wait()
+
+	close(reqCh)
+
+	os.RemoveAll(serv.StorageAddr)
+
+	logger.Log.Info("Server shutted down!")
 
 	return nil
 }
@@ -84,7 +114,10 @@ func (s *Server) ChiRouter() chi.Router {
 func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 	go func() {
 		for val := range inp {
+			Srv.ServWG.Add(1)
 			go func(val models.ChanURLs) {
+
+				defer Srv.ServWG.Done()
 				regName := regexp.MustCompile(`[^/]+$`)
 				name := regName.FindString(val.URL)
 
@@ -99,10 +132,15 @@ func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 						AceptedExt = true
 					}
 				}
+
+				Srv.Mu.Lock()
+				defer Srv.Mu.Unlock()
 				if !AceptedExt {
 					logger.Log.Info("Bad extention!", zap.String("URL:", val.URL))
+					Srv.Tasks[val.TaskID][name] = "ERROR"
 					return
 				}
+
 				Srv.Tasks[val.TaskID][name] = "PROCESS"
 				body, err := Request(val.URL)
 				if err != nil {
@@ -156,4 +194,20 @@ func Request(URL string) ([]byte, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+func RunWaitShutdown(ctx context.Context, shutCh chan struct{}, server *http.Server) {
+	go func() {
+		<-ctx.Done()
+		// получили сигнал os.Interrupt, запускаем процедуру graceful shutdown
+		logger.Log.Info("Graceful shutdown...")
+		if err := server.Shutdown(context.Background()); err != nil {
+			// ошибки закрытия Listener
+			logger.Log.Info("Error in HTTP server Shutdown", zap.Error(err))
+			return
+		}
+
+		// сообщение о Shutdown
+		close(shutCh)
+	}()
 }

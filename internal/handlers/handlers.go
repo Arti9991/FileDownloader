@@ -5,19 +5,24 @@ import (
 	"downloader/internal/models"
 	"io"
 	"os"
+	"sync"
 )
 
 type HandlersData struct {
 	StorageAddr string
 	Tasks       map[string]map[string]string
+	Mu          *sync.Mutex
 	reqChan     chan models.ChanURLs
+	HdWG        *sync.WaitGroup
 }
 
-func InitHandlersData(Stor string, reqChan chan models.ChanURLs) HandlersData {
+func InitHandlersData(Stor string, reqChan chan models.ChanURLs, HdWG *sync.WaitGroup, MapMU *sync.Mutex) HandlersData {
 	HD := new(HandlersData)
 	HD.StorageAddr = Stor
 	HD.Tasks = make(map[string]map[string]string, 3)
 	HD.reqChan = reqChan
+	HD.HdWG = HdWG
+	HD.Mu = MapMU
 	return *HD
 }
 
