@@ -7,7 +7,7 @@ import (
 	"downloader/internal/logger"
 	"downloader/internal/models"
 	"downloader/internal/storage"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -28,15 +28,20 @@ type Server struct {
 	ServWG *sync.WaitGroup
 }
 
+// Функция инициализации и запуска сервера
 func StartServer() error {
 	var err error
 	serv := new(Server)
+	// канал для отправки URL с запросами на скачивание файлов
 	reqCh := make(chan models.ChanURLs, 3)
+	// канал для ожидания сообщения о шатдауне
 	shutCh := make(chan struct{})
 
+	// wait группы для ожидания завершения всех запросов и отправок
 	var HandWG sync.WaitGroup
 	var ServWG sync.WaitGroup
 
+	// мьютекс для карт с информацией о задачах
 	var MapMU sync.Mutex
 
 	serv.ServWG = &ServWG
@@ -45,19 +50,21 @@ func StartServer() error {
 	if err != nil {
 		return err
 	}
+
 	// контекст для ожидания системного сигнала на завершение работы
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logger.Initialize(serv.InFileLog)
+	logger.Initialize(serv.InFileLog, serv.LogLevel)
 
 	logger.Log.Info("Logger initialyzed!", zap.Bool("Loggin in file is", serv.InFileLog))
 
-	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir, reqCh, &HandWG, &MapMU)
+	serv.HandlersData = handlers.InitHandlersData(serv.StorageDir, serv.LimitTasks, serv.LimitFiles,
+		reqCh, &HandWG, &MapMU)
 
 	err = storage.NewStor(serv.StorageDir)
 	if err != nil && err != http.ErrServerClosed {
-		logger.Log.Info("Error in creating storage", zap.Error(err))
+		logger.Log.Error("Error in creating storage", zap.Error(err))
 		return err
 	}
 
@@ -77,12 +84,13 @@ func StartServer() error {
 	}
 	// ожидание сообщения о Shutdown
 	<-shutCh
-
+	// ожидание конца работы всех отправителей
+	// из хэндлеров и обработчиков
 	serv.HdWG.Wait()
 	serv.ServWG.Wait()
-
+	// закрытие канала запросов на скачивание
 	close(reqCh)
-
+	// удаление папки хранилища со всеми файлами
 	os.RemoveAll(serv.StorageAddr)
 
 	logger.Log.Info("Server shutted down!")
@@ -111,21 +119,22 @@ func (s *Server) ChiRouter() chi.Router {
 	return rt
 }
 
+// функция с горутиной для приема ссылок и скачивания файлов
 func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 	go func() {
+		// в основной горутине принимаются ссылки из хэндлера
 		for val := range inp {
+			// для каждой ссылки в отдельной горутине выполняется
+			// проверка файла (расширения) и запрос по ссылке
+			// на скачивание
 			Srv.ServWG.Add(1)
 			go func(val models.ChanURLs) {
-
 				defer Srv.ServWG.Done()
+				// при помощи регулярного выражения получаем имя файла
 				regName := regexp.MustCompile(`[^/]+$`)
 				name := regName.FindString(val.URL)
 
-				//regExt := regexp.MustCompile(`[^.]+$`)
-				// extension := regExt.FindString(name)
-				// fmt.Println(extension)
-
-				fmt.Println("Есть ли суффикс:", strings.HasSuffix(name, ".png"))
+				// проверяем расширение файла
 				AceptedExt := false
 				for _, ext := range Srv.FileType {
 					if strings.HasSuffix(name, ext) {
@@ -135,19 +144,23 @@ func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 
 				Srv.Mu.Lock()
 				defer Srv.Mu.Unlock()
+				// если расширение не подходит ставим статус ERROR
 				if !AceptedExt {
 					logger.Log.Info("Bad extention!", zap.String("URL:", val.URL))
 					Srv.Tasks[val.TaskID][name] = "ERROR"
 					return
 				}
-
+				// если расширение подходит, ставим статус PROCESS
 				Srv.Tasks[val.TaskID][name] = "PROCESS"
+
+				// выполняем запрос
 				body, err := Request(val.URL)
 				if err != nil {
 					Srv.Tasks[val.TaskID][name] = "ERROR"
 					return
 				}
 
+				// сохраняем файл с полученным выше именем
 				filePath := Srv.StorageAddr + "/" + val.TaskID + "/" + name
 				err = os.WriteFile(filePath, body, 0644)
 				if err != nil {
@@ -156,6 +169,7 @@ func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 					Srv.Tasks[val.TaskID][name] = "ERROR"
 					return
 				}
+				// ставим статус "DONE"
 				Srv.Tasks[val.TaskID][name] = "DONE"
 			}(val)
 		}
@@ -163,13 +177,13 @@ func DownloadReq(inp chan models.ChanURLs, Srv *Server) error {
 	return nil
 }
 
+// функция с запросом на скачивание файла по ссылке
 func Request(URL string) ([]byte, error) {
+	// устанавливаем таймаут 10 секунд
 	clientReq := &http.Client{
 		Timeout: 10 * time.Second,
 	}
-	// пишем запрос
-	// запрос методом POST должен, помимо заголовков, содержать тело
-	// тело должно быть источником потокового чтения io.Reader
+	// создание запроса с методом GET
 	request, err := http.NewRequest(http.MethodGet, URL, nil)
 	if err != nil {
 		logger.Log.Info("Error in creating request for URL!",
@@ -183,31 +197,35 @@ func Request(URL string) ([]byte, error) {
 			zap.Error(err), zap.String("URL:", URL))
 		return nil, err
 	}
-	// выводим код ответа
-	fmt.Println("Статус-код ", response.Status)
 	defer response.Body.Close()
-	// читаем поток из тела ответа
+	// чтение потока из тела ответа
 	body, err := io.ReadAll(response.Body)
 	if err != nil {
 		logger.Log.Info("Error in read body for URL!",
 			zap.Error(err), zap.String("URL:", URL))
 		return nil, err
 	}
+
+	// проверка размера полученных данных
+	if len(body) > 20971520 {
+		logger.Log.Info("Recieved body is too big!")
+		return nil, errors.New("body is too big")
+	}
 	return body, nil
 }
 
+// функция с горутиной ожидания сообщения о выключении
 func RunWaitShutdown(ctx context.Context, shutCh chan struct{}, server *http.Server) {
 	go func() {
 		<-ctx.Done()
-		// получили сигнал os.Interrupt, запускаем процедуру graceful shutdown
+		// получен сигнал os.Interrupt, запуск процедуры graceful shutdown
 		logger.Log.Info("Graceful shutdown...")
 		if err := server.Shutdown(context.Background()); err != nil {
-			// ошибки закрытия Listener
 			logger.Log.Info("Error in HTTP server Shutdown", zap.Error(err))
 			return
 		}
 
-		// сообщение о Shutdown
+		// сообщение о Shutdown в основную горутину
 		close(shutCh)
 	}()
 }

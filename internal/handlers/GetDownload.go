@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// PostTask хэндлер для создания задачи.
+// GetDownload хэндлер для архивирования и загрузки задачи.
 func GetDownload(Hd HandlersData) http.HandlerFunc {
 	return func(res http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodGet {
@@ -25,7 +25,7 @@ func GetDownload(Hd HandlersData) http.HandlerFunc {
 		// получаем индентификатор из URL запроса
 		TaskID := path.Base(req.URL.String())
 		fmt.Println(TaskID)
-
+		// проверяем существует ли такая задача
 		URLs, has := Hd.Tasks[TaskID]
 		if !has {
 			logger.Log.Info("There's no task witch this TaskID",
@@ -33,7 +33,7 @@ func GetDownload(Hd HandlersData) http.HandlerFunc {
 			res.WriteHeader(http.StatusNoContent)
 			return
 		}
-
+		// Создаем ZIP архив с файлами задачи
 		ZipPath, err := CreateZipArchive(&Hd, TaskID, URLs)
 		if err != nil {
 			logger.Log.Error("Error in creating zip", zap.Error(err))
@@ -41,11 +41,11 @@ func GetDownload(Hd HandlersData) http.HandlerFunc {
 			return
 		}
 
+		// удаляем задачу из списка и дирректорию с задачей
 		os.RemoveAll(Hd.StorageAddr + "/" + TaskID)
 		delete(Hd.Tasks, TaskID)
-		// добавить логику уления файла архива после отправки (возомжно при шатдауне)
-		// сами по себе папки с файлами будут удаляться вместе с отправкой архива
 
+		// выдаем ZIP архив в ответ
 		res.Header().Set("Content-Disposition", "attachment; filename="+TaskID+".zip")
 		res.Header().Set("Content-Type", "application/zip")
 		http.ServeFile(res, req, ZipPath)

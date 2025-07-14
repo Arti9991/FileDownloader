@@ -9,13 +9,19 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// структура с всеми данными для конфигурации
 type Config struct {
-	HostAddr   string `env:"HOST_ADDRESS" yaml:"host_address"`
+	HostAddr   string `yaml:"host_address"`
 	InFileLog  bool   `yaml:"save_log_to_file"`
-	StorageDir string `env:"STORAGE_DIR" yaml:"storage_dir"`
+	StorageDir string `yaml:"storage_dir"`
+	LogLevel   string `yaml:"log_level"`
+	LimitFiles int    `yaml:"lim_files"`
+	LimitTasks int    `yaml:"lim_tasks"`
 	FileType   []string
 }
 
+// функция для создания конфигурации и
+// чтения значений из файла
 func InitConfig() (Config, error) {
 	//Conf := CreateConfig()
 	Conf := new(Config)
@@ -27,6 +33,7 @@ func InitConfig() (Config, error) {
 	return *Conf, nil
 }
 
+// чтение конфигурационного файла
 func ReadConfig(cfgFilePath string, config *Config) error {
 	file, err := os.OpenFile(cfgFilePath, os.O_RDONLY, 0644)
 	if err != nil {
@@ -44,20 +51,22 @@ func ReadConfig(cfgFilePath string, config *Config) error {
 	return nil
 }
 
+// создание конфигурационного файла
 func CreateConfig() *Config {
 	Conf := new(Config)
 	Conf.HostAddr = ":8080"
 	Conf.InFileLog = true
-	Conf.StorageDir = "./"
+	Conf.StorageDir = "./Storage"
 	Conf.FileType = []string{".pdf", ".jpg"}
-
+	Conf.LogLevel = "INFO"
+	Conf.LimitFiles = 3
+	Conf.LimitTasks = 3
 	WriteConfig("./Config.cfg", Conf)
 	return Conf
 }
 
-// создание файла конфигурации с данными переданными через флаги или переменными окружения
+// запись данных в файл конфигурации
 func WriteConfig(cfgFilePath string, config *Config) {
-	//var config Config
 
 	file, err := os.OpenFile(cfgFilePath, os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {

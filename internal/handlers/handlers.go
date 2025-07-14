@@ -8,17 +8,27 @@ import (
 	"sync"
 )
 
+// структура с информацией для работы хэндлеров
 type HandlersData struct {
 	StorageAddr string
+	NumTasks    int
+	NumFiles    int
 	Tasks       map[string]map[string]string
 	Mu          *sync.Mutex
 	reqChan     chan models.ChanURLs
 	HdWG        *sync.WaitGroup
 }
 
-func InitHandlersData(Stor string, reqChan chan models.ChanURLs, HdWG *sync.WaitGroup, MapMU *sync.Mutex) HandlersData {
+// инициализация стурктуры для работы хэндлеров
+func InitHandlersData(Stor string,
+	NumTasks, NumFiles int,
+	reqChan chan models.ChanURLs,
+	HdWG *sync.WaitGroup, MapMU *sync.Mutex) HandlersData {
+
 	HD := new(HandlersData)
 	HD.StorageAddr = Stor
+	HD.NumTasks = NumTasks
+	HD.NumFiles = NumFiles
 	HD.Tasks = make(map[string]map[string]string, 3)
 	HD.reqChan = reqChan
 	HD.HdWG = HdWG
@@ -26,20 +36,20 @@ func InitHandlersData(Stor string, reqChan chan models.ChanURLs, HdWG *sync.Wait
 	return *HD
 }
 
+// функция создания zip архива из файлов задачи
 func CreateZipArchive(Hd *HandlersData, TaskID string, files map[string]string) (string, error) {
-
+	// путь к zip архиву
 	zipPath := Hd.StorageAddr + "/" + TaskID + ".zip"
-
-	// files: map[имя_в_архиве]путь_к_файлу
+	// создание выходного файла
 	outFile, err := os.Create(zipPath)
 	if err != nil {
 		return "", err
 	}
 	defer outFile.Close()
-
+	// создания writer-а в архив
 	zipWriter := zip.NewWriter(outFile)
 	defer zipWriter.Close()
-
+	// запись всех файлов из папки в архив
 	for FileName, Status := range files {
 		if Status != "DONE" {
 			continue

@@ -1,31 +1,50 @@
-# 12-07-2025
+# 14-07-2025
+# Система загрузки и архивирования файлов из интернета по ссылкам.
 
-curl -v -X POST http://localhost:8080/task
+## Описание проекта
+Проект представляет собой приложение в стиле REST для загрузки файлов по ссылкам, их архивировании и выдаче пользователю. В проекте присутствуют соответствующие эндпоинты для создания задачи, загрузки файлов в задачу, проаверки статуса задачи, и скачивания файла со всеми файлами. Запуск проекта и конфигурационные файлы находятся в папке [cmd/downloader](/cmd/downloader/). 
+## Конфигурация проекта
+Для запуска проекта, в корневой папке обязательно должен быть файл Config.cfg. В этом файле содержатся настройки для работы сервера. В нем указаны:
+- адрес сервера (```host_address: :8080```);
+- производить ли логгирование в файл(```save_log_to_file: true```);
+- адрес хранилища(```storage_dir: ./Storage```); (не указывать ```./```!!!)
+- уровень логгирования(```log_level: INFO```);
+- количество одновременно выполняемых задач (```lim_tasks: 3```) и количество файлов в задаче (```lim_files: 3```);
+- список расширений файлов, доступных для скачивания (```filetype:```).
+## Запуск проекта
+Проект собирается запускается из корневой папки:
+```
+go run cmd/downloader/.
+```
+Во время работы проекта в корневой папке может быть создан каталок Storage. При завершении работы проекта этот каталог будет удален.
+## Описание эндпоинтов.
+Ниже будут описаны эндпоинты с примером их вызова из curl.
+1. Эндпоинт на создание задачи:
+    POST /task
+    ```
+    curl -v -X POST http://localhost:8080/task
+    ```
+    Создает задачу и, при успешном выполнении, в теле ответа возвращает TaskID этой задачи. 
+2. Эндпоинт на добавление URL в задачу: POST /task/{id}
+    ```
+    curl -v -X POST -H "Content-Type: application/json" -d '[
+    {"url":"https://i.ytimg.com/vi/r0drsdWPnyk/maxresdefault.jpg"},
+    {"url":"https://cdn-edge.kwork.ru/pics/t3/42/35730409-66e7451e51fd2.jpg"},
+    {"url":"https://constitutionrf.ru/constitutionrf.pdf"}]' http://localhost:8080/task/{id}
+    ```
+    Ссылки передаются в формате JSON, указанном выше.
+    При вызове этого эндпоинта, данные передаются в горутину, находящуюся в модуле server. Данная горутина выполняет запрос на скачивание файлов и сохраняет их в папке хранилища. Важно отметить, что добавляемые URL должны быть конечными ссылками до файлов, то есть в теле URL должен содержатсья сам файл с его расширением, а также размер файла ограничен 20 Мб. Иначе загрузка произведена не будет и у ссылки будет стоять статус ERROR.
 
-curl -v -X POST -H "Content-Type: application/json" -d '[
-{"url":"www.ya.ru"},
-{"url":"www.dlya.ru"},
-{"url":"www.Nya.ru"},
-{"url":"www.Fya.ru"},
-{"url":"www.Gya.ru"}]' http://localhost:8080/task/{id}
+3. Эндпоинт получения информации о задаче. GET info/{id}
+    ```
+    curl -v GET http://localhost:8080/info/{id}
+    ```
+    При успешном выполнении, выводит информацию в формате JSON обо всех файлах в задаче и их статусе. Если в задаче достигнуто максимальное количеств ссылок, заданное в конфигурации (в данном случае 3), то вне зависимости от успеха их скачивания, выдаст сслыку для загрузки итогового архива.
 
-curl -v -X POST -H "Content-Type: application/json" -d '[
-{"url":"https://res.cloudinary.com/startup-grind/image/upload/c_fill,dpr_2.0,f_auto,g_center,h_1080,q_100,w_1080/v1/gcs/platform-data-goog/events/gopherBig.png"},
-{"url":"https://cdn-edge.kwork.ru/pics/t3/42/35730409-66e7451e51fd2.jpg"},
-{"url":"https://constitutionrf.ru/constitutionrf.pdf"}]' http://localhost:8080/task/{id}
+4. Эндпоинт для загрузки архива с файлами. GET /download/{id}.
 
-curl -v GET http://localhost:8080/info/{id}
+    При вызове этого эендпоинта будет загружен архив с файлами, загруженными ранее по URL для этого задания. Название архива соответствует TaskID этого задания. Важно отметить, что при вызове этого метода файлы задания и само задание (в карте признаков), удаляются из памяти. В памяти остается только ZIP архив.
 
-
-
-curl -v -X POST -H "Content-Type: application/json" -d '[
-{"url":"https://res.cloudinary.com/startup-grind/image/upload/c_fill,dpr_2.0,f_auto,g_center,h_1080,q_100,w_1080/v1/gcs/platform-data-goog/events/gopherBig.png"}]' http://localhost:8080/task/{id}
-
-curl -v -X POST -H "Content-Type: application/json" -d '[
-{"url":"https://cdn-edge.kwork.ru/pics/t3/42/35730409-66e7451e51fd2.jpg"}]' http://localhost:8080/task/{id}
-
-curl -v -X POST -H "Content-Type: application/json" -d '[
-{"url":"https://constitutionrf.ru/constitutionrf.pdf"}]' http://localhost:8080/task/{id}
 
 
 

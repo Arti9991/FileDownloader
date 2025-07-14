@@ -28,9 +28,14 @@ var (
 
 var MapMU sync.Mutex
 
+var (
+	NumTasks = 3
+	NumFiles = 3
+)
+
 func TestPostTask(t *testing.T) {
 
-	hd := InitHandlersData(Stor, reqChan, &HandWG, &MapMU)
+	hd := InitHandlersData(Stor, NumTasks, NumFiles, reqChan, &HandWG, &MapMU)
 
 	type want struct {
 		answer     string
@@ -98,7 +103,7 @@ func TestPostTask(t *testing.T) {
 
 func TestPostAddr(t *testing.T) {
 
-	hd := InitHandlersData(Stor, reqChan, &HandWG, &MapMU)
+	hd := InitHandlersData(Stor, NumTasks, NumFiles, reqChan, &HandWG, &MapMU)
 
 	type want struct {
 		answer     string
@@ -198,7 +203,7 @@ func TestPostAddr(t *testing.T) {
 
 func TestGetStatus(t *testing.T) {
 
-	hd := InitHandlersData(Stor, reqChan, &HandWG, &MapMU)
+	hd := InitHandlersData(Stor, NumTasks, NumFiles, reqChan, &HandWG, &MapMU)
 
 	type want struct {
 		answer      string
