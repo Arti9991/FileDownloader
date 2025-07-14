@@ -20,8 +20,8 @@ func PostUrl(Hd HandlersData) http.HandlerFunc {
 			res.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
 		var err error
+
 		// проверка заголовка запроса
 		if req.Header.Get("content-type") != "application/json" {
 			logger.Log.Info("Bad content-type header with this path!",

@@ -16,19 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var Stor = "./"
-
-var UserID = "125"
 var reqChan = make(chan models.ChanURLs)
 
 var (
-	HandWG sync.WaitGroup
-	ServWG sync.WaitGroup
-)
-
-var MapMU sync.Mutex
-
-var (
+	Stor     = "./"
+	UserID   = "125"
+	HandWG   sync.WaitGroup
+	ServWG   sync.WaitGroup
+	MapMU    sync.Mutex
 	NumTasks = 3
 	NumFiles = 3
 )

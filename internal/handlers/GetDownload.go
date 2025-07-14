@@ -19,7 +19,6 @@ func GetDownload(Hd HandlersData) http.HandlerFunc {
 			res.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
 		var err error
 
 		// получаем индентификатор из URL запроса

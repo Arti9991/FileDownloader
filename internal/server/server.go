@@ -98,7 +98,7 @@ func StartServer() error {
 	return nil
 }
 
-// ChiRouter создает роутер chi для хэндлеров.
+// функция для создания Chi роутера у хэндлеров
 func (s *Server) ChiRouter() chi.Router {
 
 	rt := chi.NewRouter()
@@ -109,12 +109,6 @@ func (s *Server) ChiRouter() chi.Router {
 	rt.Post("/task/{id}", handlers.PostUrl(s.HandlersData))
 	rt.Get("/info/{id}", handlers.GetStatus(s.HandlersData))
 	rt.Get("/download/{id}", handlers.GetDownload(s.HandlersData))
-	// rt.Get("/{id}", handlers.GetAddr(s.hd))
-	// rt.Get("/ping", handlers.Ping(s.hd))
-	// rt.Post("/api/shorten", handlers.PostAddrJSON(s.hd))
-	// rt.Post("/api/shorten/batch", handlers.PostBatch(s.hd))
-	// rt.Get("/api/user/urls", handlers.GetAddrUser(s.hd))
-	// rt.Delete("/api/user/urls", handlers.DeleteAddr(s.hd))
 
 	return rt
 }

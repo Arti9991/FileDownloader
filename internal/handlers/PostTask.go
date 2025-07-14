@@ -18,6 +18,7 @@ func PostTask(Hd HandlersData) http.HandlerFunc {
 			return
 		}
 		var err error
+
 		// если количество задач меньше заданного (трех)
 		if len(Hd.Tasks) < Hd.NumTasks {
 			Hd.Mu.Lock()
